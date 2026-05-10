@@ -99,6 +99,7 @@ class Document:
     correction_number: str = ""
     nr_ksef: str = ""
     ksef_data_przyjecia: str = ""
+    rodzaj_korekty_1: bool = False
 
 
 def split_address(ulica_lokal: str) -> tuple[str, str, str]:
@@ -232,6 +233,14 @@ def parse_document(doc: ET.Element, kontrahenci: dict[str, Party]) -> Document:
     if not vat_lines:
         vat_lines.append(VatLine(stawka="23", netto=netto, vat=brutto - netto))
 
+    rodzaj_korekty_1 = False
+    pozycje_root = doc.find("POZYCJE_DOKUMENTU")
+    if pozycje_root is not None:
+        for poz in pozycje_root.findall("POZYCJA_DOKUMENTU"):
+            if (poz.findtext("RODZAJ_KOREKTY") or "").strip() == "1":
+                rodzaj_korekty_1 = True
+                break
+
     pid = id_platnika if id_platnika and id_platnika != "0" else id_kontrahenta
     party = kontrahenci.get(pid) or kontrahenci.get(id_kontrahenta) or Party(id_=pid, akronim=pid or "Nieznany")
 
@@ -259,6 +268,7 @@ def parse_document(doc: ET.Element, kontrahenci: dict[str, Party]) -> Document:
         is_correction=is_correction,
         nr_ksef=nr_ksef,
         ksef_data_przyjecia=ksef_data_przyjecia,
+        rodzaj_korekty_1=rodzaj_korekty_1,
     )
 
 
@@ -429,14 +439,15 @@ def _append_rejestr(parent: ET.Element, d: Document, *, rejestr: str, kategoria:
 
     platnosci = ET.SubElement(r, "PLATNOSCI")
     pl = ET.SubElement(platnosci, "PLATNOSC")
+    kwota_plat = abs(d.brutto) if d.rodzaj_korekty_1 else d.brutto
     _ce(pl, "TERMIN_PLAT", d.termin_platnosci)
     _ce(pl, "FORMA_PLATNOSCI_PLAT", d.forma_platnosci)
-    _ce(pl, "KWOTA_PLAT", f"{d.brutto:.2f}")
+    _ce(pl, "KWOTA_PLAT", f"{kwota_plat:.2f}")
     _ce(pl, "WALUTA_PLAT", d.waluta, cdata=True)
     _ce(pl, "KURS_WALUTY_PLAT", "NBP")
     _ce(pl, "NOTOWANIE_WALUTY_ILE_PLAT", "1")
     _ce(pl, "NOTOWANIE_WALUTY_ZA_ILE_PLAT", "1")
-    _ce(pl, "KWOTA_PLN_PLAT", f"{d.brutto:.2f}")
+    _ce(pl, "KWOTA_PLN_PLAT", f"{kwota_plat:.2f}")
     _ce(pl, "KIERUNEK", "przychód")
     _ce(pl, "PODLEGA_ROZLICZENIU", "tak")
     _ce(pl, "DATA_KURSU_PLAT", d.data_wystawienia)
@@ -475,9 +486,18 @@ def _serialize(tree: ET.ElementTree) -> bytes:
 
 
 def _unwrap_cdata(text: str) -> str:
+    def _unescape(payload: str) -> str:
+        return (
+            payload.replace("&quot;", '"')
+            .replace("&apos;", "'")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&amp;", "&")
+        )
+
     return re.sub(
         r">&lt;!\[CDATA\[(.*?)\]\]&gt;<",
-        lambda m: f"><![CDATA[{m.group(1)}]]><",
+        lambda m: f"><![CDATA[{_unescape(m.group(1))}]]><",
         text,
         flags=re.DOTALL,
     )

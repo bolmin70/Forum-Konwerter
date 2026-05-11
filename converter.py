@@ -439,7 +439,8 @@ def _append_rejestr(parent: ET.Element, d: Document, *, rejestr: str, kategoria:
 
     platnosci = ET.SubElement(r, "PLATNOSCI")
     pl = ET.SubElement(platnosci, "PLATNOSC")
-    kwota_plat = abs(d.brutto) if d.rodzaj_korekty_1 else d.brutto
+    kwota_plat = abs(d.brutto)
+    kierunek = "rozchód" if d.brutto < 0 else "przychód"
     _ce(pl, "TERMIN_PLAT", d.termin_platnosci)
     _ce(pl, "FORMA_PLATNOSCI_PLAT", d.forma_platnosci)
     _ce(pl, "KWOTA_PLAT", f"{kwota_plat:.2f}")
@@ -448,7 +449,7 @@ def _append_rejestr(parent: ET.Element, d: Document, *, rejestr: str, kategoria:
     _ce(pl, "NOTOWANIE_WALUTY_ILE_PLAT", "1")
     _ce(pl, "NOTOWANIE_WALUTY_ZA_ILE_PLAT", "1")
     _ce(pl, "KWOTA_PLN_PLAT", f"{kwota_plat:.2f}")
-    _ce(pl, "KIERUNEK", "przychód")
+    _ce(pl, "KIERUNEK", kierunek)
     _ce(pl, "PODLEGA_ROZLICZENIU", "tak")
     _ce(pl, "DATA_KURSU_PLAT", d.data_wystawienia)
     _ce(pl, "WALUTA_DOK", d.waluta, cdata=True)
